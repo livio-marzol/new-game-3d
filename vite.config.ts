@@ -8,12 +8,13 @@ export default defineConfig({
     host: true,
     watch: {
       ignored: [
+        '**/.chrome*/**',
+        '**/.git/**',
         '**/*.glb',
         '**/dist/**',
-        '**/.git/**',
-        '**/.chrome_data/**',
-        '**/.cache/**',
-        '**/node_modules/**'
+        '**/node_modules/**',
+        '**/*.png',
+        '**/*.log'
       ]
     }
   }

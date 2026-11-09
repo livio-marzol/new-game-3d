@@ -12,8 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Chrome test profiles and harnesses
+.chrome*
+test_capture.png
+
 # Editor directories and files
-.chrome_data/
 .vscode/*
 !.vscode/extensions.json
 .idea

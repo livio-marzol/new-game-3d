@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-// --- PERSISTÊNCIA & CONFIG ---
-const SAVED_GROUND_OFFSET = typeof localStorage !== 'undefined' ? localStorage.getItem('new_game_3d_ground_offset') : null;
+// Limpeza obrigatória de qualquer cache anterior do localStorage
+try {
+  localStorage.removeItem('new_game_3d_ground_offset');
+} catch (e) {}
 
+// --- CONFIG & STATE ---
 const CONFIG = {
   walkSpeed: 3.8,
   runSpeed: 6.8,
@@ -12,7 +15,7 @@ const CONFIG = {
   turnSpeed: 10.0,
   playerHeight: 1.8,
   playerCollisionRadius: 0.4,
-  groundOffset: SAVED_GROUND_OFFSET !== null ? parseFloat(SAVED_GROUND_OFFSET) : 0.24 // Altura padrão definitiva calibrada (y = 0)
+  groundOffset: 0.28 // Deslocamento direto para abaixar as botas até o piso
 };
 
 // Camera modes: 0 = Over-the-shoulder (Resident Evil action), 1 = Center, 2 = Wide
@@ -468,25 +471,29 @@ class PlayerController {
       this.mixer.update(0.001);
     }
 
-    // 6. FIXAÇÃO DEFINITIVA DOS PÉS NO CHÃO (GROUND OFFSET CALIBRADO)
+    // 6. POSICIONAMENTO SIMPLES E DIRETO NO CHÃO
     this.model.updateMatrixWorld(true);
-    const realBox = new THREE.Box3().setFromObject(this.model);
-    // Subtrai o valor de realBox.min.y e aplica o groundOffset definitivo calibrado
-    this.model.position.y -= (realBox.min.y + CONFIG.groundOffset);
+    const box = new THREE.Box3().setFromObject(this.model);
+
+    // Deslocamento direto: zera no chão (-box.min.y) e subtrai groundOffset para apoiar as solas das botas
+    this.model.position.y = -box.min.y - CONFIG.groundOffset;
     this.model.updateMatrixWorld(true);
 
-    console.log(`[Pés no Chão] Altura calibrada fixada com sucesso. groundOffset: ${CONFIG.groundOffset.toFixed(3)}m (Y do modelo: ${this.model.position.y.toFixed(4)})`);
+    console.log("VALOR EXATO DE Y INICIAL:", this.model.position.y);
   }
 
-  public adjustGroundOffset(deltaY: number) {
+  public moveDown(step = 0.02) {
     if (!this.model) return;
-    CONFIG.groundOffset += deltaY;
-    this.model.position.y -= deltaY;
+    this.model.position.y -= step;
     this.model.updateMatrixWorld(true);
-    try {
-      localStorage.setItem('new_game_3d_ground_offset', CONFIG.groundOffset.toFixed(3));
-    } catch {}
-    console.log(`[Debug Altura] groundOffset calibrado: ${CONFIG.groundOffset.toFixed(3)}m (Y do modelo: ${this.model.position.y.toFixed(4)})`);
+    console.log("VALOR EXATO DE Y:", this.model.position.y);
+  }
+
+  public moveUp(step = 0.02) {
+    if (!this.model) return;
+    this.model.position.y += step;
+    this.model.updateMatrixWorld(true);
+    console.log("VALOR EXATO DE Y:", this.model.position.y);
   }
 
   public switchAction(toAction: THREE.AnimationAction | null, duration = 0.25) {
@@ -629,10 +636,10 @@ window.addEventListener('keydown', (e) => {
       cameraMode = (cameraMode + 1) % CAMERA_PRESETS.length;
       break;
     case 'BracketLeft':
-      player.adjustGroundOffset(0.01); // Ferramenta de debug: desce 1cm e persiste no localStorage
+      player.moveDown(0.02); // Tecla [ ABAIXA o personagem (diminui o Y)
       break;
     case 'BracketRight':
-      player.adjustGroundOffset(-0.01); // Ferramenta de debug: sobe 1cm e persiste no localStorage
+      player.moveUp(0.02); // Tecla ] SOBE o personagem (aumenta o Y)
       break;
   }
 });

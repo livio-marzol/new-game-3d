@@ -325,6 +325,7 @@ class PlayerController {
   public currentSpeed = 0;
   public targetRotation = 0;
   public isMoving = false;
+  public weapon: THREE.Object3D | null = null;
 
   private loader = new GLTFLoader();
 
@@ -495,6 +496,75 @@ class PlayerController {
     }
     this.model.updateMatrixWorld(true);
     console.log("Altura calibrada pelo osso do pé:", this.model.position.y);
+    await this.loadWeapon();
+  }
+
+  public async loadWeapon(): Promise<void> {
+    try {
+      const weaponUrls = [
+        './models/rifle.glb',
+        '/models/rifle.glb',
+        './rifle.glb',
+        '/rifle.glb'
+      ];
+
+      let weaponGltf: any = null;
+      for (const url of weaponUrls) {
+        try {
+          weaponGltf = await new Promise<any>((resolve, reject) => {
+            this.loader.load(url, resolve, undefined, reject);
+          });
+          if (weaponGltf && weaponGltf.scene) {
+            console.log(`[Arma] Modelo do rifle carregado com sucesso de: ${url}`);
+            break;
+          }
+        } catch (e) {
+          // Tenta o próximo caminho
+        }
+      }
+
+      if (!weaponGltf) {
+        console.error('[Arma] Não foi possível carregar o rifle em nenhum dos caminhos.');
+        return;
+      }
+
+      const rifle = weaponGltf.scene;
+
+      // Habilita sombras na arma
+      rifle.traverse((child: any) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      // Redimensiona para escala real de um fuzil (~82cm)
+      const box = new THREE.Box3().setFromObject(rifle);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const scale = 0.82 / (maxDim > 0.01 ? maxDim : 1);
+      rifle.scale.setScalar(scale);
+
+      // Encontra o osso da mão direita do esqueleto Mixamo
+      let handBone: THREE.Object3D | null = null;
+      this.model?.traverse((child: any) => {
+        if (child.isBone && /righthand/i.test(child.name)) {
+          handBone = child;
+        }
+      });
+
+      if (handBone) {
+        // Posição e rotação inicial na palma da mão
+        rifle.rotation.set(0, Math.PI / 2, -Math.PI / 2);
+        rifle.position.set(0.04, 0.08, 0.02);
+        handBone.add(rifle);
+        this.weapon = rifle;
+        console.log('[Arma] Rifle acoplado com sucesso na mão direita.');
+      }
+    } catch (err) {
+      console.error('[Arma] Erro ao carregar /models/rifle.glb:', err);
+    }
   }
 
   public moveDown(step = 0.02) {

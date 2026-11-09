@@ -7,7 +7,14 @@ export default defineConfig({
     open: false,
     host: true,
     watch: {
-      ignored: ['**/*.glb', '**/dist/**', '**/.git/**']
+      ignored: [
+        '**/*.glb',
+        '**/dist/**',
+        '**/.git/**',
+        '**/.chrome_data/**',
+        '**/.cache/**',
+        '**/node_modules/**'
+      ]
     }
   }
 });

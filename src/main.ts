@@ -5,10 +5,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const CONFIG = {
   walkSpeed: 3.8,
   runSpeed: 6.8,
-  acceleration: 14.0,
-  deceleration: 12.0,
+  acceleration: 15.0,
+  deceleration: 14.0,
   turnSpeed: 10.0,
   playerHeight: 1.8,
+  playerCollisionRadius: 0.4
 };
 
 // Camera modes: 0 = Over-the-shoulder (Resident Evil action), 1 = Center, 2 = Wide
@@ -71,13 +72,37 @@ const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.6);
 fillLight.position.set(-15, 10, -15);
 scene.add(fillLight);
 
-// --- SCENERY ---
+// --- RIGID OBSTACLES & SCENERY ---
+export interface ObstacleCollider {
+  type: 'col' | 'crate';
+  x: number;
+  z: number;
+  r?: number; // Radius for columns
+  h?: number; // Height
+  w?: number; // Width for crates
+  d?: number; // Depth for crates
+  rot?: number; // Rotation in Y (radians)
+}
+
+export const OBSTACLES: ObstacleCollider[] = [
+  { type: 'col', x: 8, z: 8, r: 0.8, h: 6 },
+  { type: 'col', x: -8, z: 8, r: 0.8, h: 6 },
+  { type: 'col', x: 8, z: -8, r: 0.8, h: 6 },
+  { type: 'col', x: -8, z: -8, r: 0.8, h: 6 },
+  { type: 'crate', x: 4, z: -5, w: 1.6, h: 1.4, d: 1.6, rot: 0.3 },
+  { type: 'crate', x: -5, z: 4, w: 2.0, h: 1.0, d: 2.0, rot: -0.4 },
+  { type: 'crate', x: -7, z: -6, w: 1.8, h: 2.2, d: 1.8, rot: 0.6 },
+  { type: 'col', x: 16, z: 0, r: 1.2, h: 8 },
+  { type: 'col', x: -16, z: 0, r: 1.2, h: 8 },
+  { type: 'col', x: 0, z: 18, r: 1.2, h: 8 },
+  { type: 'col', x: 0, z: -18, r: 1.2, h: 8 },
+];
+
 function createEnvironment() {
-  // Ground plane with subtle grid pattern
+  // Ground plane with subtle procedural grid pattern
   const groundSize = 120;
   const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
   
-  // Custom procedural grid canvas texture
   const gridCanvas = document.createElement('canvas');
   gridCanvas.width = 512;
   gridCanvas.height = 512;
@@ -146,52 +171,39 @@ function createEnvironment() {
   ring.position.y = 0.11;
   scene.add(ring);
 
-  // Sci-fi architectural columns and obstacles for shadows
+  // Materials for columns and crates
   const columnMat = new THREE.MeshStandardMaterial({
-    color: 0x242b3d,
-    roughness: 0.4,
-    metalness: 0.6
+    color: 0x1e2230,
+    roughness: 0.35,
+    metalness: 0.7
   });
 
   const crateMat = new THREE.MeshStandardMaterial({
     color: 0x334155,
     roughness: 0.7,
-    metalness: 0.2
+    metalness: 0.25
   });
 
-  const obstacles = [
-    { type: 'col', x: 8, z: 8, r: 0.8, h: 6 },
-    { type: 'col', x: -8, z: 8, r: 0.8, h: 6 },
-    { type: 'col', x: 8, z: -8, r: 0.8, h: 6 },
-    { type: 'col', x: -8, z: -8, r: 0.8, h: 6 },
-    { type: 'crate', x: 4, z: -5, w: 1.6, h: 1.4, d: 1.6, rot: 0.3 },
-    { type: 'crate', x: -5, z: 4, w: 2.0, h: 1.0, d: 2.0, rot: -0.4 },
-    { type: 'crate', x: -7, z: -6, w: 1.8, h: 2.2, d: 1.8, rot: 0.6 },
-    { type: 'col', x: 16, z: 0, r: 1.2, h: 8 },
-    { type: 'col', x: -16, z: 0, r: 1.2, h: 8 },
-    { type: 'col', x: 0, z: 18, r: 1.2, h: 8 },
-    { type: 'col', x: 0, z: -18, r: 1.2, h: 8 },
-  ];
-
-  obstacles.forEach((obs) => {
+  // Build physical meshes for all obstacles
+  OBSTACLES.forEach((obs) => {
     if (obs.type === 'col') {
-      const geo = new THREE.CylinderGeometry(obs.r, obs.r, obs.h, 24);
+      const geo = new THREE.CylinderGeometry(obs.r, obs.r, obs.h, 32);
       const mesh = new THREE.Mesh(geo, columnMat);
-      mesh.position.set(obs.x, obs.h / 2, obs.z);
+      mesh.position.set(obs.x, (obs.h || 6) / 2, obs.z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       scene.add(mesh);
 
       // Light ring on column top
-      const topRingGeo = new THREE.CylinderGeometry(obs.r * 1.05, obs.r * 1.05, 0.2, 24);
+      const topRingGeo = new THREE.CylinderGeometry((obs.r || 0.8) * 1.05, (obs.r || 0.8) * 1.05, 0.2, 32);
       const topRingMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
       const topRing = new THREE.Mesh(topRingGeo, topRingMat);
-      topRing.position.set(obs.x, obs.h - 0.5, obs.z);
+      topRing.position.set(obs.x, (obs.h || 6) - 0.5, obs.z);
       scene.add(topRing);
     } else {
       const geo = new THREE.BoxGeometry(obs.w, obs.h, obs.d);
       const mesh = new THREE.Mesh(geo, crateMat);
-      mesh.position.set(obs.x, obs.h / 2, obs.z);
+      mesh.position.set(obs.x, (obs.h || 1.4) / 2, obs.z);
       mesh.rotation.y = obs.rot || 0;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -201,6 +213,96 @@ function createEnvironment() {
 }
 
 createEnvironment();
+
+// --- COLLISION DETECTION & RESOLUTION ---
+interface CollisionHit {
+  collided: boolean;
+  normalX: number;
+  normalZ: number;
+  penetration: number;
+}
+
+function checkObstacleCollision(posX: number, posZ: number, radius = CONFIG.playerCollisionRadius): CollisionHit | null {
+  for (const obs of OBSTACLES) {
+    if (obs.type === 'col') {
+      const colRadius = obs.r || 0.8;
+      const dx = posX - obs.x;
+      const dz = posZ - obs.z;
+      const distSq = dx * dx + dz * dz;
+      const minDist = colRadius + radius;
+
+      if (distSq < minDist * minDist) {
+        const dist = Math.sqrt(distSq);
+        const nx = dist > 0.0001 ? dx / dist : 1;
+        const nz = dist > 0.0001 ? dz / dist : 0;
+        return {
+          collided: true,
+          normalX: nx,
+          normalZ: nz,
+          penetration: minDist - dist
+        };
+      }
+    } else if (obs.type === 'crate') {
+      const hw = (obs.w || 1.6) / 2;
+      const hd = (obs.d || 1.6) / 2;
+      const rot = obs.rot || 0;
+
+      // Transform player position to crate's local coordinate space
+      const dx = posX - obs.x;
+      const dz = posZ - obs.z;
+      const cos = Math.cos(-rot);
+      const sin = Math.sin(-rot);
+      const localX = dx * cos - dz * sin;
+      const localZ = dx * sin + dz * cos;
+
+      // Closest point on the AABB in local space
+      const closestX = Math.max(-hw, Math.min(hw, localX));
+      const closestZ = Math.max(-hd, Math.min(hd, localZ));
+
+      const diffX = localX - closestX;
+      const diffZ = localZ - closestZ;
+      const distSq = diffX * diffX + diffZ * diffZ;
+
+      if (distSq < radius * radius) {
+        const dist = Math.sqrt(distSq);
+        let normLocX = 0;
+        let normLocZ = 0;
+        let pen = 0;
+
+        if (dist > 0.0001) {
+          normLocX = diffX / dist;
+          normLocZ = diffZ / dist;
+          pen = radius - dist;
+        } else {
+          // Inside crate center - push to nearest face
+          const overlapX = hw - Math.abs(localX);
+          const overlapZ = hd - Math.abs(localZ);
+          if (overlapX < overlapZ) {
+            normLocX = Math.sign(localX) || 1;
+            pen = overlapX + radius;
+          } else {
+            normLocZ = Math.sign(localZ) || 1;
+            pen = overlapZ + radius;
+          }
+        }
+
+        // Rotate normal back to world space
+        const cosW = Math.cos(rot);
+        const sinW = Math.sin(rot);
+        const worldNormX = normLocX * cosW - normLocZ * sinW;
+        const worldNormZ = normLocX * sinW + normLocZ * cosW;
+
+        return {
+          collided: true,
+          normalX: worldNormX,
+          normalZ: worldNormZ,
+          penetration: pen
+        };
+      }
+    }
+  }
+  return null;
+}
 
 // --- PLAYER CONTROLLER CLASS ---
 class PlayerController {
@@ -223,87 +325,153 @@ class PlayerController {
     scene.add(this.group);
   }
 
-  public async loadModel(url: string, onProgress?: (pct: number) => void): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.loader.load(
-        url,
-        (gltf) => {
-          this.model = gltf.scene;
+  public async loadCharacter(onProgress?: (pct: number) => void): Promise<void> {
+    // 1. CARREGAR A TEXTURA ORIGINAL DA ROUPA DO LEON EM player.glb
+    let characterTexture: THREE.Texture | null = null;
+    let characterMaterial: THREE.MeshStandardMaterial | null = null;
 
-          // 1. Enable Cast and Receive Shadows
-          this.model.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              const mesh = child as THREE.Mesh;
-              mesh.castShadow = true;
-              mesh.receiveShadow = true;
-              if (mesh.material) {
-                // Ensure double-side or realistic shadows
-                const mat = mesh.material as THREE.MeshStandardMaterial;
-                mat.roughness = Math.min(mat.roughness ?? 0.7, 0.9);
+    const textureUrls = [
+      './player.glb',
+      '/player.glb',
+      './models/player.glb',
+      '/models/player.glb'
+    ];
+
+    for (const url of textureUrls) {
+      try {
+        const texGltf = await new Promise<any>((resolve, reject) => {
+          this.loader.load(url, resolve, undefined, reject);
+        });
+
+        if (texGltf && texGltf.scene) {
+          texGltf.scene.traverse((child: any) => {
+            if (child.isMesh && child.material) {
+              const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+              if (mat.map) {
+                characterTexture = mat.map;
+                characterTexture.colorSpace = THREE.SRGBColorSpace;
+                characterTexture.flipY = false;
+                characterTexture.needsUpdate = true;
               }
+              characterMaterial = mat;
             }
           });
-
-          // 2. Realistic Scale (approx 1.8m height) & align feet to y = 0
-          this.model.updateMatrixWorld(true);
-          const initialBox = new THREE.Box3().setFromObject(this.model);
-          const size = new THREE.Vector3();
-          initialBox.getSize(size);
-
-          const modelHeight = size.y > 0.05 ? size.y : 1.0;
-          const scaleFactor = CONFIG.playerHeight / modelHeight;
-          this.model.scale.setScalar(scaleFactor);
-
-          // Re-calculate bounding box after scaling
-          this.model.updateMatrixWorld(true);
-          const scaledBox = new THREE.Box3().setFromObject(this.model);
-
-          // Place feet exactly on the floor (y = 0)
-          this.model.position.y = -scaledBox.min.y;
-
-          this.group.add(this.model);
-
-          // 3. Setup Animation Mixer & Actions
-          this.mixer = new THREE.AnimationMixer(this.model);
-
-          if (gltf.animations.length > 0) {
-            console.log('Animações encontradas:', gltf.animations.map(a => `${a.name} (${a.duration.toFixed(2)}s)`));
-
-            let idleClip = gltf.animations.find(a => /idle/i.test(a.name));
-            let walkClip = gltf.animations.find(a => /walk|run/i.test(a.name));
-
-            // Mixamo default clip detection: longest clip is idle (~7.7s), shorter clip is walk (~1s)
-            if (!idleClip) {
-              const sorted = [...gltf.animations].sort((a, b) => b.duration - a.duration);
-              idleClip = sorted[0];
-              walkClip = sorted[1] || sorted[0];
-            } else if (!walkClip) {
-              walkClip = gltf.animations.find(a => a !== idleClip) || idleClip;
-            }
-
-            this.idleAction = this.mixer.clipAction(idleClip);
-            this.walkAction = this.mixer.clipAction(walkClip);
-
-            this.idleAction.setLoop(THREE.LoopRepeat, Infinity);
-            this.walkAction.setLoop(THREE.LoopRepeat, Infinity);
-
-            // Start with Idle animation
-            this.idleAction.play();
-            this.currentAction = this.idleAction;
+          if (characterTexture || characterMaterial) {
+            console.log(`[Texturas] Textura do Leon carregada com sucesso de ${url}`);
+            break;
           }
-
-          resolve();
-        },
-        (xhr) => {
-          if (xhr.total > 0 && onProgress) {
-            onProgress((xhr.loaded / xhr.total) * 100);
-          }
-        },
-        (err) => {
-          reject(err);
         }
-      );
+      } catch (e) {
+        // Continue to next candidate
+      }
+    }
+
+    // 2. CARREGAR O MODELO COM ESQUELETO E ANIMAÇÕES (playerwalking.glb)
+    const animUrls = [
+      './playerwalking.glb',
+      '/playerwalking.glb',
+      './models/playerwalking.glb',
+      '/models/playerwalking.glb',
+      './playerglb.glb',
+      '/playerglb.glb'
+    ];
+
+    let animGltf: any = null;
+    for (const url of animUrls) {
+      try {
+        animGltf = await new Promise<any>((resolve, reject) => {
+          this.loader.load(url, resolve, (xhr) => {
+            if (xhr.total > 0 && onProgress) {
+              onProgress((xhr.loaded / xhr.total) * 100);
+            }
+          }, reject);
+        });
+        if (animGltf && animGltf.scene) {
+          console.log(`[Animações] Modelo animado carregado com sucesso de ${url}`);
+          break;
+        }
+      } catch (e) {
+        // Continue to next candidate
+      }
+    }
+
+    if (!animGltf) {
+      throw new Error('Falha ao carregar o modelo de esqueleto/animações.');
+    }
+
+    this.model = animGltf.scene;
+
+    // 3. APLICAR TEXTURA/MATERIAL PBR NA MALHA (SkinnedMesh)
+    this.model.traverse((child: any) => {
+      if (child.isMesh || child.isSkinnedMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        if (child.material) {
+          const mat = child.material as THREE.MeshStandardMaterial;
+          if (characterTexture) {
+            mat.map = characterTexture;
+            mat.color.set(0xffffff); // Cor base pura para manter as cores reais da roupa
+            mat.roughness = 0.8;
+            mat.metalness = 0.1;
+            mat.needsUpdate = true;
+          } else if (characterMaterial) {
+            child.material = characterMaterial;
+          }
+        }
+      }
     });
+
+    // 4. AJUSTE DE ESCALA PARA ALTURA HUMANA REALISTA (~1.8m)
+    this.model.updateMatrixWorld(true);
+    const initialBox = new THREE.Box3().setFromObject(this.model);
+    const size = new THREE.Vector3();
+    initialBox.getSize(size);
+
+    const modelHeight = size.y > 0.05 ? size.y : 1.0;
+    const scaleFactor = CONFIG.playerHeight / modelHeight;
+    this.model.scale.setScalar(scaleFactor);
+    this.model.updateMatrixWorld(true);
+
+    this.group.add(this.model);
+
+    // 5. INICIALIZAR MIXER E ANIMAÇÃO IDLE EM LOOP
+    this.mixer = new THREE.AnimationMixer(this.model);
+
+    if (animGltf.animations && animGltf.animations.length > 0) {
+      let idleClip = animGltf.animations.find((a: any) => /idle/i.test(a.name));
+      let walkClip = animGltf.animations.find((a: any) => /walk|run/i.test(a.name));
+
+      // Caso não encontre por nome, o Mixamo define idle como o clipe longo (~7.7s) e walk como o curto (~1s)
+      if (!idleClip) {
+        const sorted = [...animGltf.animations].sort((a: any, b: any) => b.duration - a.duration);
+        idleClip = sorted[0];
+        walkClip = sorted[1] || sorted[0];
+      } else if (!walkClip) {
+        walkClip = animGltf.animations.find((a: any) => a !== idleClip) || idleClip;
+      }
+
+      this.idleAction = this.mixer.clipAction(idleClip);
+      this.walkAction = this.mixer.clipAction(walkClip);
+
+      this.idleAction.setLoop(THREE.LoopRepeat, Infinity);
+      this.walkAction.setLoop(THREE.LoopRepeat, Infinity);
+
+      this.idleAction.play();
+      this.currentAction = this.idleAction;
+
+      // Executa o primeiro frame de animação para computar a matriz dos ossos
+      this.mixer.update(0.001);
+    }
+
+    // 6. AJUSTE DOS PÉS NO CHÃO (ELIMINAR FLUTUAÇÃO COM PRECISÃO MATEMÁTICA)
+    this.model.updateMatrixWorld(true);
+    const realBox = new THREE.Box3().setFromObject(this.model);
+    // Subtrai o valor de realBox.min.y da posição vertical do modelo
+    this.model.position.y -= realBox.min.y;
+    this.model.updateMatrixWorld(true);
+
+    console.log(`[Pés no Chão] Ajuste vertical aplicado: -${realBox.min.y.toFixed(4)}m (Posição Y final: ${this.model.position.y.toFixed(4)})`);
   }
 
   public switchAction(toAction: THREE.AnimationAction | null, duration = 0.25) {
@@ -329,44 +497,76 @@ class PlayerController {
     const hasInput = inputDirection.lengthSq() > 0.001;
     const targetMaxSpeed = isRunning ? CONFIG.runSpeed : CONFIG.walkSpeed;
 
-    // Movement relative to camera azimuth
+    // Movimentação relativa ao ângulo horizontal da câmera
     if (hasInput) {
-      // Rotate input direction by camera horizontal angle
       const moveAngle = Math.atan2(inputDirection.x, inputDirection.z) + cameraAzimuth;
       const moveVector = new THREE.Vector3(Math.sin(moveAngle), 0, Math.cos(moveAngle));
 
-      // Accelerate towards target velocity
       const targetVel = moveVector.multiplyScalar(targetMaxSpeed);
       this.velocity.lerp(targetVel, Math.min(1, CONFIG.acceleration * delta));
 
-      // Target character rotation to face movement direction
       this.targetRotation = moveAngle;
     } else {
-      // Decelerate smoothly to stop
+      // Desaceleração suave
       this.velocity.lerp(new THREE.Vector3(0, 0, 0), Math.min(1, CONFIG.deceleration * delta));
     }
 
-    // Apply movement to position
-    this.group.position.addScaledVector(this.velocity, delta);
+    // --- SISTEMA DE COLISÃO COM DESLIZAMENTO NAS LATERAIS ---
+    const moveStep = this.velocity.clone().multiplyScalar(delta);
 
-    // Smooth character rotation towards targetRotation
+    // Teste no eixo X
+    if (Math.abs(moveStep.x) > 0.0001) {
+      const nextX = this.group.position.x + moveStep.x;
+      const colX = checkObstacleCollision(nextX, this.group.position.z, CONFIG.playerCollisionRadius);
+      if (!colX) {
+        this.group.position.x = nextX;
+      } else {
+        // Bloqueia avanço em X mas permite deslizar pelo eixo Z
+        this.velocity.x = 0;
+      }
+    }
+
+    // Teste no eixo Z
+    if (Math.abs(moveStep.z) > 0.0001) {
+      const nextZ = this.group.position.z + moveStep.z;
+      const colZ = checkObstacleCollision(this.group.position.x, nextZ, CONFIG.playerCollisionRadius);
+      if (!colZ) {
+        this.group.position.z = nextZ;
+      } else {
+        // Bloqueia avanço em Z mas permite deslizar pelo eixo X
+        this.velocity.z = 0;
+      }
+    }
+
+    // Repulsão suave para bordas/quinas (evita prender em vértices)
+    for (let pass = 0; pass < 2; pass++) {
+      const col = checkObstacleCollision(this.group.position.x, this.group.position.z, CONFIG.playerCollisionRadius);
+      if (col && col.penetration > 0.0001) {
+        this.group.position.x += col.normalX * col.penetration;
+        this.group.position.z += col.normalZ * col.penetration;
+      }
+    }
+
+    // Limites de borda da arena
+    const boundary = 56;
+    this.group.position.x = THREE.MathUtils.clamp(this.group.position.x, -boundary, boundary);
+    this.group.position.z = THREE.MathUtils.clamp(this.group.position.z, -boundary, boundary);
+
+    // Rotação suave do personagem em direção ao movimento
     const currentRot = this.group.rotation.y;
     let diff = this.targetRotation - currentRot;
-    // Normalize angle difference to [-PI, PI]
     while (diff < -Math.PI) diff += Math.PI * 2;
     while (diff > Math.PI) diff -= Math.PI * 2;
     this.group.rotation.y += diff * Math.min(1, CONFIG.turnSpeed * delta);
 
-    // Current horizontal speed
+    // Velocidade escalar e controle de animações
     this.currentSpeed = this.velocity.length();
     this.isMoving = this.currentSpeed > 0.15;
 
-    // Transition animations based on speed
     if (this.isMoving) {
       if (this.currentAction !== this.walkAction) {
         this.switchAction(this.walkAction, 0.22);
       }
-      // Scale walk animation playback with actual speed
       if (this.walkAction) {
         const baseSpeed = CONFIG.walkSpeed;
         this.walkAction.timeScale = THREE.MathUtils.clamp(this.currentSpeed / baseSpeed, 0.6, 2.0);
@@ -379,7 +579,7 @@ class PlayerController {
   }
 }
 
-// --- INPUT HANDLER ---
+// --- CONTROLES DE TECLADO ---
 const keys = {
   forward: false,
   backward: false,
@@ -411,7 +611,6 @@ window.addEventListener('keydown', (e) => {
       keys.run = true;
       break;
     case 'KeyC':
-      // Cycle camera preset
       cameraMode = (cameraMode + 1) % CAMERA_PRESETS.length;
       break;
   }
@@ -442,15 +641,14 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-// --- MOUSE CAMERA CONTROLS (ORBIT / THIRD PERSON LOOK) ---
+// --- CONTROLE DE CÂMERA PELO MOUSE (ÓRBITA EM TERCEIRA PESSOA) ---
 let isMouseDown = false;
 let mouseX = 0;
 let mouseY = 0;
-let cameraYaw = 0; // Horizontal orbit angle (radians)
-let cameraPitch = 0.15; // Vertical elevation angle (radians)
+let cameraYaw = 0;
+let cameraPitch = 0.15;
 
 window.addEventListener('mousedown', (e) => {
-  // Drag anywhere on canvas
   if (e.button === 0 || e.button === 2) {
     isMouseDown = true;
     mouseX = e.clientX;
@@ -472,72 +670,61 @@ window.addEventListener('mousemove', (e) => {
   cameraYaw -= deltaX * 0.005;
   cameraPitch += deltaY * 0.004;
 
-  // Clamp vertical pitch so camera doesn't flip or go under floor
   cameraPitch = THREE.MathUtils.clamp(cameraPitch, -0.2, 0.85);
 });
 
-// Prevent context menu when right clicking
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// --- CAMERA CONTROLLER ---
+// --- CONTROLE DA CÂMERA (LERP SUAVE) ---
 const cameraTargetLookAt = new THREE.Vector3();
 const desiredCameraPos = new THREE.Vector3();
 
-function updateCamera(playerPos: THREE.Vector3, playerRotationY: number, delta: number) {
+function updateCamera(playerPos: THREE.Vector3, delta: number) {
   const preset = CAMERA_PRESETS[cameraMode];
 
-  // Base look position around player chest/head
   const lookPos = new THREE.Vector3(
     playerPos.x,
     playerPos.y + preset.lookHeight,
     playerPos.z
   );
 
-  // Smooth target look position
   cameraTargetLookAt.lerp(lookPos, 1 - Math.exp(-14 * delta));
 
-  // Compute camera position relative to orbit angles (cameraYaw and cameraPitch)
-  // Horizontal orbit direction
   const cosPitch = Math.cos(cameraPitch);
   const sinPitch = Math.sin(cameraPitch);
   const sinYaw = Math.sin(cameraYaw);
   const cosYaw = Math.cos(cameraYaw);
 
-  // Backward direction vector
   const backVector = new THREE.Vector3(
     sinYaw * cosPitch,
     sinPitch,
     cosYaw * cosPitch
   ).normalize();
 
-  // Right direction vector for shoulder offset
   const rightVector = new THREE.Vector3(
     Math.cos(cameraYaw),
     0,
     -Math.sin(cameraYaw)
   ).normalize();
 
-  // Position = LookTarget + Back * distance + Right * shoulderOffset + Y * height
   desiredCameraPos.copy(cameraTargetLookAt)
     .addScaledVector(backVector, preset.distance)
     .addScaledVector(rightVector, preset.shoulderOffset);
 
-  // Keep camera above floor
-  if (desiredCameraPos.y < 0.4) {
-    desiredCameraPos.y = 0.4;
+  if (desiredCameraPos.y < 0.35) {
+    desiredCameraPos.y = 0.35;
   }
 
-  // Smooth lerp camera position
   camera.position.lerp(desiredCameraPos, 1 - Math.exp(-10 * delta));
   camera.lookAt(cameraTargetLookAt);
 
-  // Directional light follows player position for consistent crisp shadows
+  // Sombra direcional acompanha o jogador para manter nitidez máxima
   dirLight.position.set(playerPos.x + 18, 30, playerPos.z + 18);
   dirLight.target.position.copy(playerPos);
   dirLight.target.updateMatrixWorld();
 }
 
-// --- INITIALIZE & START ---
+// --- INICIALIZAÇÃO DO JOGO ---
 const player = new PlayerController();
 
 const progressBar = document.getElementById('progress-bar') as HTMLElement;
@@ -547,40 +734,22 @@ const statState = document.getElementById('stat-state') as HTMLElement;
 const statSpeed = document.getElementById('stat-speed') as HTMLElement;
 const statFps = document.getElementById('stat-fps') as HTMLElement;
 
-// Try loading models: first check 'player.glb', fallback to './player.glb' or './models/player.glb'
 async function start() {
-  const modelCandidates = [
-    './models/player.glb',
-    './player.glb',
-    '/player.glb',
-    'playerglb.glb',
-    'playerwalking.glb'
-  ];
-
-  let loaded = false;
-  for (const url of modelCandidates) {
-    try {
-      loadingText.textContent = `Carregando modelo (${url})...`;
-      await player.loadModel(url, (pct) => {
-        progressBar.style.width = `${pct}%`;
-      });
-      loaded = true;
-      console.log(`Modelo carregado com sucesso a partir de: ${url}`);
-      break;
-    } catch (err) {
-      console.warn(`Falha ao tentar carregar ${url}:`, err);
-    }
-  }
-
-  if (!loaded) {
-    loadingText.textContent = 'Erro ao carregar o modelo player.glb';
+  try {
+    loadingText.textContent = 'Carregando texturas e modelo...';
+    await player.loadCharacter((pct) => {
+      progressBar.style.width = `${pct}%`;
+    });
+  } catch (err) {
+    console.error('Erro ao inicializar personagem:', err);
+    loadingText.textContent = 'Erro ao carregar modelo 3D';
     return;
   }
 
-  // Hide loading screen
+  // Ocultar tela de loading
   loadingOverlay.classList.add('fade-out');
 
-  // Start Animation Loop
+  // Loop de Animação e Renderização
   let lastTime = performance.now();
   let frameCount = 0;
   let fpsTimer = performance.now();
@@ -591,7 +760,7 @@ async function start() {
     const delta = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
-    // FPS calculation
+    // Cálculo de FPS
     frameCount++;
     if (currentTime - fpsTimer >= 500) {
       const fps = Math.round((frameCount * 1000) / (currentTime - fpsTimer));
@@ -600,7 +769,7 @@ async function start() {
       fpsTimer = currentTime;
     }
 
-    // Compute input movement direction
+    // Direção de entrada do teclado
     const inputDir = new THREE.Vector3();
     if (keys.forward) inputDir.z += 1;
     if (keys.backward) inputDir.z -= 1;
@@ -611,13 +780,13 @@ async function start() {
       inputDir.normalize();
     }
 
-    // Update Player physics & animations
+    // Atualiza jogador (física, colisões deslizantes e animações)
     player.update(delta, inputDir, keys.run, cameraYaw);
 
-    // Update Third Person Camera
-    updateCamera(player.group.position, player.group.rotation.y, delta);
+    // Atualiza câmera em terceira pessoa
+    updateCamera(player.group.position, delta);
 
-    // Update HUD Stats
+    // Atualiza painel HUD
     if (statState) {
       statState.textContent = player.isMoving ? (keys.run ? 'Correndo' : 'Caminhando') : 'Idle';
       statState.style.color = player.isMoving ? '#34d399' : '#38bdf8';
@@ -632,7 +801,7 @@ async function start() {
   requestAnimationFrame(animate);
 }
 
-// Window resize handler
+// Redimensionamento de janela responsivo
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();

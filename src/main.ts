@@ -813,12 +813,12 @@ async function start() {
       fpsTimer = currentTime;
     }
 
-    // Direção de entrada do teclado
+    // Direção de entrada do teclado (-Z é frente, +X é direita)
     const inputDir = new THREE.Vector3();
-    if (keys.forward) inputDir.z += 1;
-    if (keys.backward) inputDir.z -= 1;
-    if (keys.left) inputDir.x += 1;
-    if (keys.right) inputDir.x -= 1;
+    if (keys.forward) inputDir.z -= 1;  // W / Seta Cima: Frente
+    if (keys.backward) inputDir.z += 1; // S / Seta Baixo: Trás
+    if (keys.left) inputDir.x -= 1;     // A / Seta Esquerda: Esquerda
+    if (keys.right) inputDir.x += 1;    // D / Seta Direita: Direita
 
     if (inputDir.lengthSq() > 0.001) {
       inputDir.normalize();

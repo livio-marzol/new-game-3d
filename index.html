@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Game 3D - Third Person</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Loading Screen -->
+      <div id="loading-overlay">
+        <div class="loader-box">
+          <div class="spinner"></div>
+          <h2>Carregando Jogo 3D...</h2>
+          <div class="progress-bar-container">
+            <div id="progress-bar"></div>
+          </div>
+          <p id="loading-text">Carregando player.glb...</p>
+        </div>
+      </div>
+
+      <!-- In-game HUD -->
+      <div id="hud">
+        <header class="hud-header">
+          <div class="hud-brand">
+            <span class="badge-tag">3D THIRD PERSON</span>
+            <h1>NEW GAME 3D</h1>
+          </div>
+          <div class="hud-stats">
+            <div class="stat-pill">
+              <span class="stat-label">STATUS</span>
+              <span id="stat-state" class="stat-value">Idle</span>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-label">VELOCIDADE</span>
+              <span id="stat-speed" class="stat-value">0.0 m/s</span>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-label">FPS</span>
+              <span id="stat-fps" class="stat-value">60</span>
+            </div>
+          </div>
+        </header>
+
+        <!-- Instructions bottom panel -->
+        <footer class="hud-footer">
+          <div class="controls-card">
+            <div class="control-item">
+              <div class="key-group">
+                <kbd>W</kbd>
+                <div class="key-row">
+                  <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+                </div>
+              </div>
+              <span>Mover Personagem</span>
+            </div>
+
+            <div class="control-item">
+              <kbd class="key-wide">Shift</kbd>
+              <span>Correr</span>
+            </div>
+
+            <div class="control-item">
+              <div class="mouse-icon">🖱️</div>
+              <span>Clique & Arraste para Girar Câmera</span>
+            </div>
+
+            <div class="control-item">
+              <kbd>C</kbd>
+              <span>Alternar Câmera (Ombro / Central / Distante)</span>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

@@ -471,15 +471,30 @@ class PlayerController {
       this.mixer.update(0.001);
     }
 
-    // 6. POSICIONAMENTO SIMPLES E DIRETO NO CHÃO
-    this.model.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(this.model);
-
-    // Deslocamento direto: zera no chão (-box.min.y) e subtrai groundOffset para apoiar as solas das botas
-    this.model.position.y = -box.min.y - CONFIG.groundOffset;
+    // 6. POSICIONAMENTO AUTOMÁTICO BASEADO NO OSSO DO PÉ (MIXAMO)
+    this.model.position.y = 0;
     this.model.updateMatrixWorld(true);
 
-    console.log("VALOR EXATO DE Y INICIAL:", this.model.position.y);
+    // Encontra a coordenada Y real do osso mais baixo (pé / ponta do pé)
+    let lowestBoneY = Infinity;
+    this.model.traverse((child: any) => {
+      if (child.isBone && /foot|toe/i.test(child.name)) {
+        const boneWorldPos = new THREE.Vector3();
+        child.getWorldPosition(boneWorldPos);
+        if (boneWorldPos.y < lowestBoneY) {
+          lowestBoneY = boneWorldPos.y;
+        }
+      }
+    });
+
+    if (lowestBoneY !== Infinity) {
+      // Compensa a altura do osso até o chão descontando uma pequena folga para a sola da bota (~2.5cm)
+      this.model.position.y = -(lowestBoneY - 0.025);
+    } else {
+      this.model.position.y = -0.32; // Fallback direto
+    }
+    this.model.updateMatrixWorld(true);
+    console.log("Altura calibrada pelo osso do pé:", this.model.position.y);
   }
 
   public moveDown(step = 0.02) {
@@ -635,12 +650,13 @@ window.addEventListener('keydown', (e) => {
     case 'KeyC':
       cameraMode = (cameraMode + 1) % CAMERA_PRESETS.length;
       break;
-    case 'BracketLeft':
-      player.moveDown(0.02); // Tecla [ ABAIXA o personagem (diminui o Y)
-      break;
-    case 'BracketRight':
-      player.moveUp(0.02); // Tecla ] SOBE o personagem (aumenta o Y)
-      break;
+  }
+
+  // Suporte direto para teclados ABNT2 e internacionais via e.key
+  if (e.key === '[') {
+    player.moveDown(0.02);
+  } else if (e.key === ']') {
+    player.moveUp(0.02);
   }
 });
 

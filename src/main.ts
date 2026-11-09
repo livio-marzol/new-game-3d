@@ -9,7 +9,8 @@ const CONFIG = {
   deceleration: 14.0,
   turnSpeed: 10.0,
   playerHeight: 1.8,
-  playerCollisionRadius: 0.4
+  playerCollisionRadius: 0.4,
+  footOffset: 0.26 // Compensação vertical fina para abaixar as botas até a superfície do chão (y = 0)
 };
 
 // Camera modes: 0 = Over-the-shoulder (Resident Evil action), 1 = Center, 2 = Wide
@@ -64,7 +65,8 @@ dirLight.shadow.camera.left = -d;
 dirLight.shadow.camera.right = d;
 dirLight.shadow.camera.top = d;
 dirLight.shadow.camera.bottom = -d;
-dirLight.shadow.bias = -0.0005;
+dirLight.shadow.bias = -0.0003;
+dirLight.shadow.normalBias = 0.02;
 scene.add(dirLight);
 
 // Subtle warm fill light
@@ -151,15 +153,15 @@ function createEnvironment() {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // Center spawn podium
-  const platformGeo = new THREE.CylinderGeometry(4, 4.3, 0.1, 48);
+  // Center spawn podium - nivelado com o chão para consistência em y = 0
+  const platformGeo = new THREE.CylinderGeometry(4, 4.3, 0.02, 48);
   const platformMat = new THREE.MeshStandardMaterial({
     color: 0x1e293b,
     roughness: 0.5,
     metalness: 0.5
   });
   const platform = new THREE.Mesh(platformGeo, platformMat);
-  platform.position.y = 0.05;
+  platform.position.y = 0.005;
   platform.receiveShadow = true;
   scene.add(platform);
 
@@ -168,7 +170,7 @@ function createEnvironment() {
   const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide });
   const ring = new THREE.Mesh(ringGeo, ringMat);
   ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.11;
+  ring.position.y = 0.012;
   scene.add(ring);
 
   // Materials for columns and crates
@@ -467,11 +469,20 @@ class PlayerController {
     // 6. AJUSTE DOS PÉS NO CHÃO (ELIMINAR FLUTUAÇÃO COM PRECISÃO MATEMÁTICA)
     this.model.updateMatrixWorld(true);
     const realBox = new THREE.Box3().setFromObject(this.model);
-    // Subtrai o valor de realBox.min.y da posição vertical do modelo
+    // Subtrai o valor de realBox.min.y e aplica a compensação de elevação do esqueleto Mixamo
     this.model.position.y -= realBox.min.y;
+    this.model.position.y -= CONFIG.footOffset;
     this.model.updateMatrixWorld(true);
 
-    console.log(`[Pés no Chão] Ajuste vertical aplicado: -${realBox.min.y.toFixed(4)}m (Posição Y final: ${this.model.position.y.toFixed(4)})`);
+    console.log(`[Pés no Chão] Ajuste vertical aplicado: -${(realBox.min.y + CONFIG.footOffset).toFixed(4)}m (Posição Y final: ${this.model.position.y.toFixed(4)})`);
+  }
+
+  public adjustFootOffset(deltaY: number) {
+    if (!this.model) return;
+    CONFIG.footOffset += deltaY;
+    this.model.position.y -= deltaY;
+    this.model.updateMatrixWorld(true);
+    console.log(`[Ajuste Fino] Nova compensação footOffset: ${CONFIG.footOffset.toFixed(2)}m (Y do modelo: ${this.model.position.y.toFixed(4)})`);
   }
 
   public switchAction(toAction: THREE.AnimationAction | null, duration = 0.25) {
@@ -612,6 +623,12 @@ window.addEventListener('keydown', (e) => {
       break;
     case 'KeyC':
       cameraMode = (cameraMode + 1) % CAMERA_PRESETS.length;
+      break;
+    case 'BracketLeft':
+      player.adjustFootOffset(-0.02); // Abaixa 2cm
+      break;
+    case 'BracketRight':
+      player.adjustFootOffset(0.02); // Levanta 2cm
       break;
   }
 });
